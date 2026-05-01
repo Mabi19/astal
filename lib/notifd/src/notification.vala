@@ -301,21 +301,20 @@ public class AstalNotifd.Notification : Object {
         _hints = dict.lookup_value("hints", VariantType.DICTIONARY);
         _expire_timeout = dict.lookup_value("expire-timeout", VariantType.INT32).get_int32();
 
-        _actions = new List<Action>();
         var actions = dict.lookup_value("actions", VariantType.ARRAY);
         VariantIter iter = actions.iterator();
         string? id;
         string? label;
 
         while (iter.next("{ss}", out id, out label)) {
-            _actions.append(new Action(id, label));
+            add_action(new Action(id, label));
         }
     }
 
     internal Variant serialize() {
-        var actions = new VariantBuilder(new VariantType.array(new VariantType("{ss}")));
-        foreach (var action in _actions) {
-            actions.add("{ss}", action.id, action.label);
+        var actions_builder = new VariantBuilder(new VariantType.array(new VariantType("{ss}")));
+        foreach (var action in this.actions) {
+            actions_builder.add("{ss}", action.id, action.label);
         }
 
         return new Variant.array(new VariantType("{sv}"), {
@@ -327,7 +326,7 @@ public class AstalNotifd.Notification : Object {
             new Variant("{sv}", "body", new Variant.string(_body)),
             new Variant("{sv}", "hints", _hints),
             new Variant("{sv}", "expire-timeout", new Variant.int32(_expire_timeout)),
-            new Variant("{sv}", "actions", actions.end()),
+            new Variant("{sv}", "actions", actions_builder.end()),
         });
     }
 
