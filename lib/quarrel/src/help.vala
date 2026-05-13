@@ -2,11 +2,11 @@ namespace Quarrel {
 private const string INDENT = "  ";
 private const string PAD = "   ";
 
-private string bold (string str) {
-    return "\x1b[1m%s\x1b[0m".printf(str);
+private string bold (string? str) {
+    return "\x1b[1m%s\x1b[0m".printf(str ?? "(null)");
 }
 
-private string title (string str) {
+private string title (string? str) {
     return "\x1b[32m%s".printf(bold(str));
 }
 
@@ -198,10 +198,11 @@ public string help (Command command) {
     var builder = new StringBuilder();
 
     if (command.about_text != null) {
-        builder.append(@"$(command.about_text)\n");
+        builder.append(command.about_text);
+        builder.append("\n\n");
     }
 
-    builder.append(title("\nUsage:"));
+    builder.append(title("Usage:"));
     command_usage(command, builder);
 
     if ((command.arg_list.length > 0)) {
