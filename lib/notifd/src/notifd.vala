@@ -1,6 +1,6 @@
 namespace AstalNotifd {
 /**
- * Get the singleton instance of [class@AstalNotifd.Notifd]
+ * Get the singleton instance of [class@AstalNotifd.Notifd].
  */
 public Notifd get_default() {
     return Notifd.get_default();
@@ -8,9 +8,9 @@ public Notifd get_default() {
 }
 
 /**
- * The Notification daemon.
+ * The notification daemon.
  *
- * This class queues up to become the next daemon, while acting as a proxy in the meantime.
+ * This class queues up to become the next daemon while acting as a proxy in the meantime.
  */
 public class AstalNotifd.Notifd : Object {
     internal static Settings settings;
@@ -19,7 +19,7 @@ public class AstalNotifd.Notifd : Object {
     private static Notifd _instance;
 
     /**
-     * Get the singleton instance
+     * Get the singleton instance.
      */
     public static Notifd get_default() {
         if (_instance == null) _instance = new Notifd();
@@ -40,9 +40,9 @@ public class AstalNotifd.Notifd : Object {
     }
 
     /**
-     * Indicate to frontends to not show popups to the user.
-     * This property does not have any effect on its own, its merely
-     * a value to use between the daemon process and proxies for frontends to use.
+     * Tells frontends not to show popups to the user.
+     * This property does not have any effect on its own; it is merely
+     * a value shared between the daemon process and proxies.
      */
     public bool dont_disturb {
         get { return Notifd.settings.get_boolean("dont-disturb"); }
@@ -70,7 +70,7 @@ public class AstalNotifd.Notifd : Object {
     }
 
     /**
-     * Gets the [class@AstalNotifd.Notification] with id or null if there is no such Notification.
+     * Gets the [class@AstalNotifd.Notification] with the given ID, or null if there is no such notification.
      */
     public Notification? get_notification(uint id) {
         if (proxy != null) return proxy.get_notif(id);
@@ -81,8 +81,8 @@ public class AstalNotifd.Notifd : Object {
     /**
      * Emitted when the daemon receives a [class@AstalNotifd.Notification].
      *
-     * @param id The ID of the Notification.
-     * @param replaced Indicates if an existing Notification was replaced.
+     * @param id The ID of the notification.
+     * @param replaced Indicates whether an existing notification was replaced.
      */
     public signal void notified(uint id, bool replaced) {
         notify_property("notifications");
@@ -91,8 +91,8 @@ public class AstalNotifd.Notifd : Object {
     /**
      * Emitted when a [class@AstalNotifd.Notification] is resolved.
      *
-     * @param id The ID of the Notification.
-     * @param reason The reason how the Notification was resolved.
+     * @param id The ID of the notification.
+     * @param reason The reason the notification was resolved.
      */
     public signal void resolved(uint id, ClosedReason reason) {
         notify_property("notifications");

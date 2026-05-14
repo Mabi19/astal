@@ -54,7 +54,7 @@ abstract class NotifdCommand : Command {
                                     case "false":
                                         hints.set(name, new Variant.boolean(false));
                                         break;
-                                    default: return "Invalid boolean value. Must be one of: true or false";
+                                    default: return "Invalid boolean value. Must be 'true' or 'false'";
                                 }
                                 break;
                             }
@@ -171,8 +171,8 @@ abstract class NotifdCommand : Command {
             opt(sound_file = new FileOpt("sound", 's', "Sound file to play when the notification pops up."));
             opt(sound_name = new StringOpt("sound-name", 'S', "Named sound to play when the notification pops up."));
             opt(suppress_sound = new Flag("suppress-sound", '\0', "Suppress playing any sound."));
-            opt(transient = new Flag("transient", 't', "Indicate that the notification should be excluded from persistency."));
-            opt(hints = new Hints("hint", 'H', "Valid types are boolean, int, double, string and variant."));
+            opt(transient = new Flag("transient", 't', "Indicate that the notification should be excluded from persistence."));
+            opt(hints = new Hints("hint", 'H', "Valid types are boolean, int, double, string, and variant."));
 
             example("astal-notifd notify \"Hello World\" \"Lorem ipsum dolor sit amet, consectetur adipiscing elit.\"");
             example("astal-notifd notify \"Extra hints\" -H \"string:custom-hint:<{'hello':'there'}>\"");
@@ -300,8 +300,8 @@ abstract class NotifdCommand : Command {
 
         public GetNotification() {
             name = "get";
-            about("Print a notification by its id");
-            opt(pretty = new Flag("pretty", 'p', "Pretty print json"));
+            about("Print a notification by its ID");
+            opt(pretty = new Flag("pretty", 'p', "Pretty print JSON"));
             required_arg("ID", "Notification ID");
         }
 
@@ -325,7 +325,7 @@ abstract class NotifdCommand : Command {
     class DismissNotification : NotifdCommand {
         public DismissNotification() {
             name = "dismiss";
-            about("Dismiss a notification by its id");
+            about("Dismiss a notification by its ID");
             required_arg("ID", "Notification ID");
         }
 
@@ -374,8 +374,8 @@ abstract class NotifdCommand : Command {
 
         public ListNotifications() {
             name = "list";
-            about("Print every notification");
-            opt(pretty = new Flag("pretty", 'p', "Pretty print json"));
+            about("Print all notifications");
+            opt(pretty = new Flag("pretty", 'p', "Pretty print JSON"));
         }
 
         public override async int execute() {

@@ -32,7 +32,7 @@ internal class AstalNotifd.Daemon : Object {
     public Variant get_notification(uint id) throws Error {
         var n = notifs.get(id);
         if (n == null) {
-            throw new DBusError.INVALID_ARGS("notification does no exist");
+            throw new DBusError.INVALID_ARGS("notification does not exist");
         }
         return n.serialize();
     }
@@ -158,7 +158,7 @@ internal class AstalNotifd.Daemon : Object {
     public signal void notification_closed(uint id, uint reason);
     public signal void action_invoked(uint id, string action);
 
-    // TODO: expose though Notifd and let users emit it
+    // TODO: expose through Notifd and let users emit it
     public signal void activation_token(uint id, string token);
 
     // internals
@@ -172,7 +172,7 @@ internal class AstalNotifd.Daemon : Object {
         Bytes data = image.get_child_value(6).get_data_as_bytes();
 
         if (bps != 8) {
-            warning("Can not cache image from %s. %s", app_name,
+            warning("Cannot cache image from %s. %s", app_name,
                 "Currently only RGB images with 8 bits per sample are supported.");
             return null;
         }

@@ -15,10 +15,10 @@ public class AstalNotifd.Notification : Object {
     /** State of the notification. */
     public State state { internal set; get; default = State.DRAFT; }
 
-    /** Unix time of when the notification was sent or received. */
+    /** Unix time when the notification was sent or received. */
     public int64 time { internal set; get; default = 0; }
 
-    /** Id of the notification. */
+    /** ID of the notification. */
     public uint32 id {
         get { return _id; }
         set { set_field("id", () => { _id = value; }); }
@@ -48,15 +48,14 @@ public class AstalNotifd.Notification : Object {
         set { set_field("body", () => { _body = value; }); }
     }
 
-    /** Time in milliseconds after the notification expires. */
+    /** Time in milliseconds after which the notification expires. */
     public int32 expire_timeout {
         get { return _expire_timeout; }
         set { set_field("expire-timeout", () => { _expire_timeout = value; }); }
     }
 
     /**
-     * List of [class@AstalNotifd.Action] of the notification.
-     * Can be invoked by calling [method@AstalNotifd.Notification.invoke] with the action's id.
+     * List of [class@AstalNotifd.Action]s associated with the notification.
      */
     public List<weak Action> actions {
         get {
@@ -66,8 +65,8 @@ public class AstalNotifd.Notification : Object {
     }
 
     /**
-     * Hints of the notification. Hints are a way to provide extra data to servers.
-     * To set hints on a `DRAFT` notification use [method@AstalNotifd.Notification.set_hint]
+     * Notification hints. Hints are a way to provide extra data to servers.
+     * To set hints on a `DRAFT` notification, use [method@AstalNotifd.Notification.set_hint]
      * or the dedicated property setters for standard hints.
      */
     public Variant hints {
@@ -96,7 +95,7 @@ public class AstalNotifd.Notification : Object {
         }
     }
 
-    /** Standard `image-path` hint. Path of an image  */
+    /** Standard `image-path` hint. Path to an image. */
     public string image {
         owned get { return get_str_hint("image-path"); }
         set { set_hint("image-path", new Variant.string(value)); }
@@ -104,7 +103,7 @@ public class AstalNotifd.Notification : Object {
 
     /**
      * Standard `action-icons` hint.
-     * Indicates whether [class@AstalNotifd.Action] identifier should be interpreted as a named icon.
+     * Indicates whether [class@AstalNotifd.Action] identifiers should be interpreted as named icons.
      */
     public bool action_icons {
         get { return get_bool_hint("action-icons"); }
@@ -131,7 +130,7 @@ public class AstalNotifd.Notification : Object {
 
     /**
      * Standard `resident` hint.
-     * Indicates whether notification is kept after action invocation.
+     * Indicates whether the notification is kept after action invocation.
      */
     public bool resident {
         get { return get_bool_hint("resident"); }
@@ -167,7 +166,7 @@ public class AstalNotifd.Notification : Object {
 
     /**
      * Standard `transient` hint.
-     * Indicates that the notification should be excluded from persistency.
+     * Indicates that the notification should be excluded from persistence.
      */
     public bool transient {
         get { return get_bool_hint("transient"); }
@@ -211,16 +210,16 @@ public class AstalNotifd.Notification : Object {
     }
 
     /**
-     * Emitted when this this notification is resolved.
+     * Emitted when this notification is resolved.
      *
-     * @param reason The reason how the Notification was resolved.
+     * @param reason The reason the notification was resolved.
      */
     public signal void resolved(ClosedReason reason);
 
     /**
      * Emitted when an [class@AstalNotifd.Action] of this notification is invoked.
      *
-     * @param action_id id of the invoked action
+     * @param action_id ID of the invoked action.
      */
     public signal void invoked(string action_id);
 

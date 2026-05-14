@@ -59,6 +59,7 @@
     pyright
     ruff
     uncrustify
+    codespell
   ];
 
   gsettings =

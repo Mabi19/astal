@@ -2,10 +2,10 @@
  * Notification action.
  */
 public class AstalNotifd.Action : Object {
-    /** Id of this action. */
+    /** ID of this action. */
     public string id { construct set; get; default = "1"; }
 
-    /** Label of this action that should be displayed to user. */
+    /** Label displayed to the user for this action. */
     public string label { construct set; get; default = ""; }
 
     /** Emitted when the notification this action was added to invoked this action. */
@@ -32,9 +32,9 @@ public class AstalNotifd.Action : Object {
 
     /**
      * Invoke this action.
-     * Note that this method just notifies the client that this action was invoked
-     * by the user. If for example this notification persists through the lifetime
-     * of the sending application this action will have no effect.
+     * Note that this method only notifies the client that this action was invoked
+     * by the user. For example, if this notification persists beyond the lifetime
+     * of the sending application, this action will have no effect.
      */
     public void invoke() {
         if (notification == null) {
