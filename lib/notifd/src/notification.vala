@@ -3,14 +3,14 @@
  */
 public class AstalNotifd.Notification : Object {
     uint32 _id = 0;
-    string _app_name = "";
-    string _app_icon = "";
+    string? _app_name = "";
+    string? _app_icon = "";
     string _summary = "";
     string _body = "";
-    Variant _hints;
+    Variant _hints = new Variant.array(new VariantType("{sv}"), {});
     int32 _expire_timeout = -1;
     List<Action> _actions = new List<Action>();
-    List<weak Action> actions_copy;
+    List<weak Action> _actions_copy;
 
     /** State of the notification. */
     public State state { internal set; get; default = State.DRAFT; }
@@ -25,13 +25,13 @@ public class AstalNotifd.Notification : Object {
     }
 
     /** Name of the sending application. */
-    public string app_name {
+    public string? app_name {
         get { return _app_name; }
         set { set_field("app-name", () => { _app_name = value; }); }
     }
 
     /** Icon name of the sending application. */
-    public string app_icon {
+    public string? app_icon {
         get { return _app_icon; }
         set { set_field("app-icon", () => { _app_icon = value; }); }
     }
@@ -60,19 +60,40 @@ public class AstalNotifd.Notification : Object {
      */
     public List<weak Action> actions {
         get {
-            if (actions_copy == null) actions_copy = _actions.copy();
-            return actions_copy;
+            if (_actions_copy == null) _actions_copy = _actions.copy();
+            return _actions_copy;
         }
     }
 
     /**
      * Hints of the notification. Hints are a way to provide extra data to servers.
-     * To set hints on a `DRAFT` Notification use [method@AstalNotifd.Notification.set_hint]
-     * or the property setters for standard hints.
+     * To set hints on a `DRAFT` notification use [method@AstalNotifd.Notification.set_hint]
+     * or the dedicated property setters for standard hints.
      */
     public Variant hints {
         get { return _hints; }
-        internal set { _hints = value; }
+    }
+
+    /**
+     * Extra hints that are merged with [property@AstalNotifd.Notification:hints].
+     */
+    public Variant extra_hints {
+        construct {
+            if (value == null) return;
+            return_if_fail(value.get_type().dup_string() != "");
+
+            var iter = value.iterator();
+            var dict = new VariantDict(_hints);
+
+            string key;
+            Variant variant;
+            while (iter.next("{sv}", out key, out variant)) {
+                print(@"$key $(variant.print(false))\n");
+                dict.insert_value(key, variant);
+            }
+
+            _hints = dict.end();
+        }
     }
 
     /** Standard `image-path` hint. Path of an image  */
@@ -128,7 +149,7 @@ public class AstalNotifd.Notification : Object {
 
     /**
      * Standard `sound-name` hint.
-     * A themeable named sound from to play when the notification pops up
+     * A themeable named sound to play when the notification pops up.
      */
     public string sound_name {
         owned get { return get_str_hint("sound-name"); }
@@ -137,7 +158,7 @@ public class AstalNotifd.Notification : Object {
 
     /**
      * Standard `suppress-sound` hint.
-     * Indicates to suppress playing any sounds.
+     * Indicates to suppress playing any sound.
      */
     public bool suppress_sound {
         get { return get_bool_hint("suppress-sound"); }
@@ -263,10 +284,6 @@ public class AstalNotifd.Notification : Object {
             return this;
         }
 
-        if (_hints == null) {
-            _hints = new Variant.array(new VariantType("{sv}"), {});
-        }
-
         var dict = new VariantDict(_hints);
         dict.insert_value(name, value);
         _hints = dict.end();
@@ -294,8 +311,13 @@ public class AstalNotifd.Notification : Object {
         var dict = new VariantDict(variant);
         time = dict.lookup_value("time", VariantType.INT64).get_int64();
         _id = dict.lookup_value("id", VariantType.UINT32).get_uint32();
-        _app_name = dict.lookup_value("app-name", VariantType.STRING).get_string();
-        _app_icon = dict.lookup_value("app-icon", VariantType.STRING).get_string();
+
+        var app_name = dict.lookup_value("app-name", VariantType.STRING);
+        if (app_name != null) _app_name = app_name.get_string();
+
+        var app_icon = dict.lookup_value("app-icon", VariantType.STRING);
+        if (app_icon != null) _app_icon = app_icon.get_string();
+
         _summary = dict.lookup_value("summary", VariantType.STRING).get_string();
         _body = dict.lookup_value("body", VariantType.STRING).get_string();
         _hints = dict.lookup_value("hints", VariantType.DICTIONARY);
@@ -317,17 +339,22 @@ public class AstalNotifd.Notification : Object {
             actions_builder.add("{ss}", action.id, action.label);
         }
 
-        return new Variant.array(new VariantType("{sv}"), {
-            new Variant("{sv}", "time", new Variant.int64(time)),
-            new Variant("{sv}", "id", new Variant.uint32(_id)),
-            new Variant("{sv}", "app-name", new Variant.string(_app_name)),
-            new Variant("{sv}", "app-icon", new Variant.string(_app_icon)),
-            new Variant("{sv}", "summary", new Variant.string(_summary)),
-            new Variant("{sv}", "body", new Variant.string(_body)),
-            new Variant("{sv}", "hints", _hints),
-            new Variant("{sv}", "expire-timeout", new Variant.int32(_expire_timeout)),
-            new Variant("{sv}", "actions", actions_builder.end()),
-        });
+        var dict = new VariantDict();
+        dict.insert_value("time", new Variant.int64(time));
+        dict.insert_value("id", new Variant.uint32(_id));
+        if ((_app_name != "") && (_app_name != null)) {
+            dict.insert_value("app-name", new Variant.string(_app_name));
+        }
+        if ((_app_icon != "") && (_app_icon != null)) {
+            dict.insert_value("app-icon", new Variant.string(_app_icon));
+        }
+        dict.insert_value("summary", new Variant.string(_summary));
+        dict.insert_value("body", new Variant.string(_body));
+        dict.insert_value("hints", _hints);
+        dict.insert_value("expire-timeout", new Variant.int32(_expire_timeout));
+        dict.insert_value("actions", actions_builder.end());
+
+        return dict.end();
     }
 
     private delegate void VoidFunc();

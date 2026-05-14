@@ -1,130 +1,508 @@
 using AstalNotifd;
+using Quarrel;
 
-static bool help;
-static bool version;
-static bool daemonize;
-static bool list;
-static string invoke;
-static int close_n;
-static int get_n;
-static bool toggle_dnd;
+static SpecialFlag help;
+static SpecialFlag version;
 
-const OptionEntry[] options = {
-    { "version", 'v', OptionFlags.NONE, OptionArg.NONE, ref version, null, null },
-    { "help", 'h', OptionFlags.NONE, OptionArg.NONE, ref help, null, null },
-    { "daemonize", 'd', OptionFlags.NONE, OptionArg.NONE, ref daemonize, null, null },
-    { "list", 'l', OptionFlags.NONE, OptionArg.NONE, ref list, null, null },
-    { "invoke", 'i', OptionFlags.NONE, OptionArg.STRING, ref invoke, null, null },
-    { "close", 'c', OptionFlags.NONE, OptionArg.INT, ref close_n, null, null },
-    { "get", 'g', OptionFlags.NONE, OptionArg.INT, ref get_n, null, null },
-    { "toggle-dnd", 't', OptionFlags.NONE, OptionArg.NONE, ref toggle_dnd, null, null },
-    { null },
-};
+abstract class NotifdCommand : Command {
+    public abstract async int execute();
 
-int main(string[] argv) {
-    try {
-        var opts = new OptionContext();
-        opts.add_main_entries(options, null);
-        opts.set_help_enabled(false);
-        opts.set_ignore_unknown_options(false);
-        opts.parse(ref argv);
-    } catch (OptionError err) {
-        printerr(err.message);
+    protected static int err(string msg) {
+        printerr(@"\x1b[1;31merror:\x1b[0m $msg\n");
         return 1;
     }
 
-    if (help) {
-        stdout.printf("Cli client for astal-notifd\n\n");
-        stdout.printf("Usage:\n");
-        stdout.printf("    %s [flags]\n\n", argv[0]);
-        stdout.printf("Flags:\n");
-        stdout.printf("    -h, --help           Print this help and exit\n");
-        stdout.printf("    -v, --version        Print version number and exit\n");
-        stdout.printf("    -l, --list           Print every notification and exit\n");
-        stdout.printf("    -d, --daemonize      Watch for new notifications\n");
-        stdout.printf("    -i, --invoke         Invoke a notification action\n");
-        stdout.printf("    -c, --close          Close a notification by its id\n");
-        stdout.printf("    -g, --get            Print a notification by its id\n");
-        stdout.printf("    -t, --toggle-dnd     Toggle do not disturb\n");
-        stdout.flush();
-        return 0;
+    class Notify : NotifdCommand {
+        class UrgencyLevel : Opt {
+            public Urgency urgency { get; set; default = Urgency.NORMAL; }
+
+            construct {
+                parse.connect((value) => {
+                    switch (value) {
+                        case "low": urgency = Urgency.LOW; break;
+                        case "normal": urgency = Urgency.NORMAL; break;
+                        case "critical": urgency = Urgency.CRITICAL; break;
+                        default: return "Level must be one of: 'low', 'normal', 'critical'";
+                    }
+                });
+            }
+
+            public UrgencyLevel(string long, char short, string description) {
+                Object(long: long, short: short, description: description);
+                name = "LEVEL";
+            }
+        }
+
+        class Hints : Opt {
+            public HashTable<string, Variant> hints = new HashTable<string, Variant>(str_hash, str_equal);
+
+            construct {
+                parse.connect((value) => {
+                    var parts = value.split(":", 3);
+                    if (parts.length != 3) {
+                        return "Hints should be in TYPE:NAME:VALUE format";
+                    }
+                    var vtype = parts[0];
+                    var name = parts[1];
+                    try {
+                        switch (vtype) {
+                            case "boolean": {
+                                switch (parts[2]) {
+                                    case "true":
+                                        hints.set(name, new Variant.boolean(true));
+                                        break;
+                                    case "false":
+                                        hints.set(name, new Variant.boolean(false));
+                                        break;
+                                    default: return "Invalid boolean value. Must be one of: true or false";
+                                }
+                                break;
+                            }
+                            case "int": {
+                                hints.set(name, new Variant.int32(int.parse(parts[2])));
+                                break;
+                            }
+                            case "double": {
+                                hints.set(name, new Variant.double(double.parse(parts[2])));
+                                break;
+                            }
+                            case "string": {
+                                hints.set(name, new Variant.string(parts[2]));
+                                break;
+                            }
+                            case "variant": {
+                                hints.set(name, Variant.parse(VariantType.VARIANT, parts[2]));
+                                break;
+                            }
+                            default: return @"Invalid hint type '$vtype'. Must be one of: boolean, int, double, string, variant";
+                        }
+                    } catch (Error error) {
+                        return error.message;
+                    }
+                });
+            }
+
+            public Hints(string long, char short, string description) {
+                Object(long: long, short: short, description: description);
+                name = "TYPE:NAME:VALUE";
+            }
+        }
+
+        class Actions : Opt {
+            public AstalNotifd.Action[] actions = {};
+
+            construct {
+                parse.connect((value) => {
+                    var id_text = value.split("=", 2);
+                    var id = (id_text.length == 2) ? id_text[0] : actions.length.to_string();
+                    var text = (id_text.length == 2) ? id_text[1] : id_text[0];
+                    actions += new AstalNotifd.Action(id, text);
+                });
+            }
+
+            public Actions(string long, char short, string description) {
+                Object(long: long, short: short, description: description);
+                name = "[ID=]Text";
+            }
+        }
+
+        [DBus(name = "org.freedesktop.Notifications")]
+        interface OrgFreedesktopNotifications : Object {
+            public abstract void close_notification(uint id) throws DBusError, IOError;
+
+            public static void close(uint id) {
+                try {
+                    OrgFreedesktopNotifications proxy = Bus.get_proxy_sync(
+                        BusType.SESSION,
+                        "org.freedesktop.Notifications",
+                        "/org/freedesktop/Notifications"
+                    );
+
+                    proxy.close_notification(id);
+                } catch (Error error) {
+                    printerr(error.message);
+                }
+            }
+        }
+
+        Flag wait;
+        Flag print_id;
+        IntOpt replace_id;
+        IntOpt expire_time;
+        StringOpt app_name;
+        StringOpt app_icon;
+        UrgencyLevel urgency;
+        Actions actions;
+        FileOpt image;
+        Flag action_icons;
+        StringOpt category;
+        StringOpt desktop_entry;
+        Flag resident;
+        FileOpt sound_file;
+        StringOpt sound_name;
+        Flag suppress_sound;
+        Flag transient;
+        Hints hints;
+
+        public Notify() {
+            name = "notify";
+            about("Send a notification");
+            required_arg("SUMMARY", "The summary of the notification.");
+            arg("BODY", "The body of the notification.");
+            opt(wait = new Flag("wait", 'w', "Wait for the notification to be closed before exiting."));
+            opt(print_id = new Flag("print-id", 'p', "Print the notification ID."));
+            opt(replace_id = new IntOpt("replace-id", 'r', "ID of the notification to replace.") {
+                value = -1
+            });
+            opt(app_name = new StringOpt("app-name", 'n', "App name for the notification.") {
+                value = "astal-notifd"
+            });
+            opt(app_icon = new StringOpt("app-icon", 'i', "Named icon or filename for the notification."));
+            opt(urgency = new UrgencyLevel("urgency", 'u', "The urgency level (low, normal, critical)."));
+            opt(expire_time = new IntOpt("expire-time", 'e', "Timeout in milliseconds at which to expire the notification.") {
+                value = -1
+            });
+            opt(actions = new Actions("action", 'a', "Action to append to the notification. Implies --wait."));
+            opt(image = new FileOpt("image", 'I', "Image to be displayed for the notification."));
+            opt(action_icons = new Flag("action-icons", 'A', "Indicate that action IDs should be interpreted as named icons."));
+            opt(category = new StringOpt("category", 'c', "The category of the notification."));
+            opt(desktop_entry = new StringOpt("desktop-entry", 'd', "Name of the desktop filename representing the notification."));
+            opt(resident = new Flag("resident", 'R', "Indicate that the notification is kept alive after action invocation."));
+            opt(sound_file = new FileOpt("sound", 's', "Sound file to play when the notification pops up."));
+            opt(sound_name = new StringOpt("sound-name", 'S', "Named sound to play when the notification pops up."));
+            opt(suppress_sound = new Flag("suppress-sound", '\0', "Suppress playing any sound."));
+            opt(transient = new Flag("transient", 't', "Indicate that the notification should be excluded from persistency."));
+            opt(hints = new Hints("hint", 'H', "Valid types are boolean, int, double, string and variant."));
+
+            example("astal-notifd notify \"Hello World\" \"Lorem ipsum dolor sit amet, consectetur adipiscing elit.\"");
+            example("astal-notifd notify \"Extra hints\" -H \"string:custom-hint:<{'hello':'there'}>\"");
+            example("astal-notifd notify \"With Actions\" -a \"id1=My custom Action\"");
+            example("astal-notifd notify \"Custom Variant hints\" -H \"variant:custom-hint:<{'hello':'there'}>\"");
+        }
+
+        public override async int execute() {
+            var exit_code = 0;
+            var loop = new MainLoop(null, false);
+
+            var notification = new AstalNotifd.Notification() {
+                id = replace_id.value,
+                summary = args[0],
+                expire_timeout = expire_time.value,
+                app_name = app_name.value,
+                urgency = urgency.urgency,
+            };
+
+            if (args.length > 1) {
+                notification.body = args[1];
+            }
+
+            if (app_icon.value != null) {
+                notification.app_icon = app_icon.value;
+            }
+
+            if (image.value != null) {
+                var path = image.value.get_path();
+                if (path != null) {
+                    notification.image = path;
+                }
+            }
+
+            if (action_icons.enabled) {
+                notification.action_icons = true;
+            }
+
+            if (category.value != null) {
+                notification.category = category.value;
+            }
+
+            if (desktop_entry.value != null) {
+                notification.category = desktop_entry.value;
+            }
+
+            if (resident.enabled) {
+                notification.resident = true;
+            }
+
+            if (sound_file.value != null) {
+                var path = sound_file.value.get_path();
+                if (path != null) {
+                    notification.sound_file = path;
+                }
+            }
+
+            if (sound_name.value != null) {
+                notification.sound_name = sound_name.value;
+            }
+
+            if (suppress_sound.enabled) {
+                notification.suppress_sound = true;
+            }
+
+            if (transient.enabled) {
+                notification.transient = true;
+            }
+
+            // notify-send uses int64
+            notification.set_hint("sender-pid", new Variant.int64(Posix.getpid()));
+
+            hints.hints.foreach((name, value) => {
+                notification.set_hint(name, value);
+            });
+
+            foreach (var action in actions.actions) {
+                notification.add_action(action);
+            }
+
+            notification.invoked.connect((id) => {
+                print(id);
+                loop.quit();
+            });
+
+            notification.resolved.connect(() => {
+                loop.quit();
+            });
+
+            try {
+                yield send_notification(notification);
+            } catch (Error error) {
+                return err(error.message);
+            }
+
+            if (print_id.enabled) {
+                print(@"$(notification.id)\n");
+            }
+
+            if (!wait.enabled || (actions.actions.length > 0)) {
+                Unix.signal_add(Posix.Signal.HUP, () => {
+                    OrgFreedesktopNotifications.close(notification.id);
+                    return Source.REMOVE;
+                });
+
+                Unix.signal_add(Posix.Signal.INT, () => {
+                    OrgFreedesktopNotifications.close(notification.id);
+                    return Source.REMOVE;
+                });
+
+                Unix.signal_add(Posix.Signal.TERM, () => {
+                    OrgFreedesktopNotifications.close(notification.id);
+                    return Source.REMOVE;
+                });
+
+                loop.run();
+            }
+
+            return exit_code;
+        }
     }
 
-    if (version) {
-        print(VERSION);
-        return 0;
+    class GetNotification : NotifdCommand {
+        Flag pretty;
+
+        public GetNotification() {
+            name = "get";
+            about("Print a notification by its id");
+            opt(pretty = new Flag("pretty", 'p', "Pretty print json"));
+            required_arg("ID", "Notification ID");
+        }
+
+        public override async int execute() {
+            var notifd = Notifd.get_default();
+            var id = uint.parse(args[0]);
+            var notification = notifd.get_notification(id);
+
+            if (notification != null) {
+                var node = Json.gvariant_serialize(notification.serialize());
+                var json = Json.to_string(node, pretty.enabled);
+                print(json);
+            } else {
+                return err(@"notification '$id' does not exist");
+            }
+
+            return 0;
+        }
     }
 
-    Notifd.settings = new Settings("io.astal.notifd");
+    class DismissNotification : NotifdCommand {
+        public DismissNotification() {
+            name = "dismiss";
+            about("Dismiss a notification by its id");
+            required_arg("ID", "Notification ID");
+        }
 
-    if (list) {
-        var n_list = Notifd.settings.get_value("notifications");
-        print(Json.gvariant_serialize_data(n_list, null));
-        return 0;
+        public override async int execute() {
+            var notifd = Notifd.get_default();
+            var id = uint.parse(args[0]);
+            var n = notifd.get_notification(id);
+
+            if (n != null) {
+                n.dismiss();
+                notifd.daemon?.flush_state();
+            } else {
+                return err(@"notification '$id' does not exist");
+            }
+
+            return 0;
+        }
     }
 
-    if (toggle_dnd) {
-        var v = Notifd.settings.get_boolean("ignore-timeout");
-        Notifd.settings.set_boolean("ignore-timeout", !v);
-        return 0;
+    class InvokeNotification : NotifdCommand {
+        public InvokeNotification() {
+            name = "invoke";
+            about("Invoke a notification action");
+            required_arg("ID", "Notification ID");
+            required_arg("ACTION", "Action ID");
+        }
+
+        public override async int execute() {
+            var notifd = Notifd.get_default();
+            var id = uint.parse(args[0]);
+            var action = args[1];
+
+            var n = notifd.get_notification(id);
+            if (n != null) {
+                n.invoke(action);
+            } else {
+                return err(@"notification '$id' does not exist");
+            }
+
+            return 0;
+        }
     }
 
-    var notifd = Notifd.get_default();
+    class ListNotifications : NotifdCommand {
+        Flag pretty;
 
-    if (daemonize) {
-        notifd.notified.connect((id) => {
-            var n = notifd.get_notification(id).serialize();
-            stdout.printf("%s\n", Json.gvariant_serialize_data(n, null));
+        public ListNotifications() {
+            name = "list";
+            about("Print every notification");
+            opt(pretty = new Flag("pretty", 'p', "Pretty print json"));
+        }
+
+        public override async int execute() {
+            var settings = new Settings("io.astal.notifd");
+            var notifications = settings.get_value("notifications");
+            var node = Json.gvariant_serialize(notifications);
+            var json = Json.to_string(node, pretty.enabled);
+            print(json);
+            return 0;
+        }
+    }
+
+    class NotificationDaemon : NotifdCommand {
+        Flag events;
+
+        public NotificationDaemon() {
+            name = "daemon";
+            about("Start the notifd daemon or a proxy");
+            opt(events = new Flag("events", 'e', "Print notified and resolved events."));
+        }
+
+        private void print_event(string event, string payload) {
+            stdout.printf(@"{\"event\":\"$event\",\"payload\":$payload}\n");
             stdout.flush();
-        });
-        new MainLoop().run();
+        }
+
+        public override async int execute() {
+            var notifd = Notifd.get_default();
+
+            if (events.enabled) {
+                notifd.notified.connect((id) => {
+                    var n = notifd.get_notification(id).serialize();
+                    var payload = Json.gvariant_serialize_data(n, null);
+                    print_event("notified", payload);
+                });
+
+                notifd.resolved.connect((id, reason) => {
+                    print_event("resolved", @"{\"id\":$id,\"reason\":\"$reason\"}");
+                });
+            } else {
+                notifd.notified.connect((id) => {
+                    var n = notifd.get_notification(id).serialize();
+                    stdout.printf("%s\n", Json.gvariant_serialize_data(n, null));
+                    stdout.flush();
+                });
+            }
+            new MainLoop().run();
+            return 0;
+        }
     }
 
-    if (invoke != null) {
-        if (!invoke.contains(":")) {
-            print("invoke format needs to be <notif-id>:<action-id>");
+    class ToggleDND : NotifdCommand {
+        Flag enable;
+        Flag disable;
+        Flag toggle;
+
+        public ToggleDND() {
+            name = "dnd";
+            about("Toggle 'do not disturb' state");
+            opt(enable = new Flag("enable", 'e', "Enable 'do not disturb'"));
+            opt(disable = new Flag("disable", 'd', "Disable 'do not disturb'"));
+            opt(toggle = new Flag("toggle", 't', "Toggle 'do not disturb'"));
+        }
+
+        public override async int execute() {
+            if (enable.enabled && disable.enabled && toggle.enabled) {
+                return err("Flags are mutually exclusive");
+            }
+
+            if (enable.enabled) {
+                Notifd.settings.set_boolean("dont-disturb", true); return 0;
+            }
+
+            if (disable.enabled) {
+                Notifd.settings.set_boolean("dont-disturb", false);
+                return 0;
+            }
+
+            var dnd = Notifd.settings.get_boolean("dont-disturb");
+
+            if (toggle.enabled) {
+                Notifd.settings.set_boolean("dont-disturb", !dnd);
+                return 0;
+            }
+
+            print(dnd ? "enabled" : "disabled");
+            return 0;
+        }
+    }
+
+    class CLI : NotifdCommand {
+        public CLI() {
+            name = "astal-notifd";
+            about("Notifd CLI");
+            opt(help = new SpecialFlag("help", 'h', "Print help"));
+            opt(version = new SpecialFlag("version", 'v', "Print version"));
+            subcommand(new Notify().opt(help));
+            subcommand(new GetNotification().opt(help));
+            subcommand(new DismissNotification().opt(help));
+            subcommand(new InvokeNotification().opt(help));
+            subcommand(new ListNotifications().opt(help));
+            subcommand(new NotificationDaemon().opt(help));
+            subcommand(new ToggleDND().opt(help));
+        }
+
+        public override async int execute() {
+            printerr(Quarrel.help(this));
             return 1;
         }
-
-        var split = invoke.split(":");
-        var n_id = int.parse(split[0]);
-        var a_id = split[1];
-
-        var n = notifd.get_notification(n_id);
-        if (n != null) {
-            n.invoke(a_id);
-        } else {
-            printerr(@"notification '$n_id' does not exist");
-        }
     }
 
-    if (close_n > 0) {
-        var n = notifd.get_notification(close_n);
-        if (n != null) {
-            n.dismiss();
+    static async int main(string[] argv) {
+        Notifd.settings = new Settings("io.astal.notifd");
 
-            // make sure to write state when daemon is not running
-            var av = new VariantType.array(new VariantType("v"));
-            var builder = new VariantBuilder(av);
-            foreach (var notif in notifd.notifications) {
-                if (!notif.transient) builder.add("v", notif.serialize());
+        try {
+            var cmd = new CLI().parse(argv) as NotifdCommand;
+
+            if (help.enabled) {
+                print(Quarrel.help(cmd));
+                return 0;
             }
-            Notifd.settings.set_value("notifications", builder.end());
-        } else {
-            printerr(@"notification '$close_n' does not exist");
+
+            return yield cmd.execute();
+        } catch (ParseError parse_error) {
+            return err(parse_error.message);
+        } finally {
+            Settings.sync();
         }
     }
-
-    if (get_n > 0) {
-        var n = notifd.get_notification(get_n);
-        if (n != null) {
-            print(Json.gvariant_serialize_data(n.serialize(), null));
-        } else {
-            printerr(@"notification '$get_n' does not exist");
-        }
-    }
-
-    if (!daemonize && (invoke == null) && (close_n == 0) && (get_n == 0)) return 1;
-
-    return 0;
 }

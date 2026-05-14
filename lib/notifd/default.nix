@@ -1,15 +1,22 @@
 {
   mkAstalPkg,
   pkgs,
-  ...
-}:
-mkAstalPkg {
-  pname = "astal-notifd";
-  src = ./.;
-  packages = with pkgs; [json-glib gdk-pixbuf];
+  self,
+}: let
+  inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (self.packages.${system}) quarrel;
+in
+  mkAstalPkg {
+    pname = "astal-notifd";
+    src = ./.;
+    packages = [
+      quarrel
+      pkgs.json-glib
+      pkgs.gdk-pixbuf
+    ];
 
-  libname = "notifd";
-  authors = "Aylur";
-  name = "AstalNotifd";
-  description = "Notification daemon library";
-}
+    libname = "notifd";
+    authors = "Aylur";
+    name = "AstalNotifd";
+    description = "Notification daemon";
+  }

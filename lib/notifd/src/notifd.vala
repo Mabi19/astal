@@ -26,8 +26,8 @@ public class AstalNotifd.Notifd : Object {
         return _instance;
     }
 
-    private Daemon daemon;
-    private Proxy proxy;
+    internal Daemon daemon;
+    internal Proxy proxy;
 
     /**
      * Ignore the timeout specified by incoming notifications.

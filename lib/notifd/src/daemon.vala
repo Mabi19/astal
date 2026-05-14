@@ -44,7 +44,7 @@ internal class AstalNotifd.Daemon : Object {
             notification_list = notifs.get_values().copy();
             n.resolved(reason);
             notification_closed(id, reason);
-            write_state();
+            queue_state_flush();
             resolved(id, reason);
         }
     }
@@ -106,16 +106,20 @@ internal class AstalNotifd.Daemon : Object {
             summary = summary,
             body = body,
             expire_timeout = timeout,
-            hints = hints,
             time = new DateTime.now_local().to_unix(),
         };
+
+        hints.foreach((name, variant) => {
+            n.set_hint(name, variant);
+        });
+
         foreach (var action in Action.new_list(actions)) {
             n.add_action(action);
         }
 
         add_notification(n);
         notified(id, replaced);
-        write_state();
+        queue_state_flush();
 
         var ignore_timeout = Notifd.settings.get_boolean("ignore-timeout");
 
@@ -202,26 +206,27 @@ internal class AstalNotifd.Daemon : Object {
         return file_name;
     }
 
+    internal void flush_state() {
+        var av = new VariantType.array(new VariantType("v"));
+        var builder = new VariantBuilder(av);
+
+        foreach (var n in notifs.get_values()) {
+            if (!n.transient) builder.add("v", n.serialize());
+        }
+
+        Notifd.settings.set_value("notifications", builder.end());
+    }
+
     private uint? state_debounce = null;
-    private void write_state() {
+    private void queue_state_flush() {
         if (state_debounce != null) {
             Source.remove(state_debounce);
             state_debounce = null;
         }
 
-        // schedule new one
         state_debounce = GLib.Timeout.add(100, () => {
             state_debounce = null;
-
-            var av = new VariantType.array(new VariantType("v"));
-            var builder = new VariantBuilder(av);
-
-            foreach (var n in notifs.get_values()) {
-                if (!n.transient) builder.add("v", n.serialize());
-            }
-
-            Notifd.settings.set_value("notifications", builder.end());
-
+            flush_state();
             return GLib.Source.REMOVE;
         });
     }

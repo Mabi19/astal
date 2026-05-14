@@ -80,6 +80,8 @@ if get_option('lib')
       '--property', ':'.join(
         'Notifd.notifications',
         'Notification.actions',
+        'Notification.app_name',
+        'Notification.app_icon',
       ),
       sources,
     ],
@@ -130,10 +132,15 @@ if get_option('lib')
 endif
 
 if get_option('cli')
+  cli_deps = [
+    dependency('quarrel-0.1'),
+    meson.get_compiler('vala').find_library('posix'),
+  ]
+
   executable(
     meson.project_name(),
     ['src/cli.vala', sources],
-    dependencies: deps,
+    dependencies: deps + cli_deps,
     install: true,
   )
 endif
