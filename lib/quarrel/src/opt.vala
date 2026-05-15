@@ -86,11 +86,9 @@ public sealed class IntOpt : Opt {
     }
 
     private string? on_parse(string value) {
-        int parsed;
-        if (!int.try_parse(value, out parsed)) {
+        if (!int.try_parse(value, out _value)) {
             return @"invalid integer: $value";
         }
-        _value = parsed;
         return null;
     }
 
@@ -101,28 +99,25 @@ public sealed class IntOpt : Opt {
 }
 
 /**
- * Option that stores a single floating-point value.
+ * Option that stores a double-precision floating point value.
  */
-public sealed class FloatOpt : Opt {
-    /** Parsed floating-point value. */
-    public float value { get; set; }
+public sealed class DoubleOpt : Opt {
+    /** Parsed double-precision floating point value. */
+    public double value { get; set; }
 
     construct {
         parse.connect(on_parse);
     }
 
-    /** Parse and store a floating-point value. */
     private string? on_parse(string value) {
-        float parsed;
-        if (!float.try_parse(value, out parsed)) {
-            return @"invalid float: $value";
+        if (!double.try_parse(value, out _value)) {
+            return @"invalid double-precision floating point number: $value";
         }
-        _value = parsed;
         return null;
     }
 
-    /** Create a floating-point-valued option. */
-    public FloatOpt(string? long = null, char short = '\0', string? description = null) {
+    /** Create a double-precision floating point option. */
+    public DoubleOpt(string? long = null, char short = '\0', string? description = null) {
         Object(long: long, short: short, description: description, name: "DOUBLE");
     }
 }
