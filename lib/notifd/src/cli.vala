@@ -1,10 +1,9 @@
 using AstalNotifd;
 using Quarrel;
 
-static SpecialFlag help;
-static SpecialFlag version;
-
 abstract class NotifdCommand : Command {
+    static SpecialFlag help;
+
     public abstract async int execute();
 
     protected static int err(string msg) {
@@ -120,7 +119,7 @@ abstract class NotifdCommand : Command {
 
                     proxy.close_notification(id);
                 } catch (Error error) {
-                    printerr(error.message);
+                    printerr("%s\n", error.message);
                 }
             }
         }
@@ -254,7 +253,7 @@ abstract class NotifdCommand : Command {
             }
 
             notification.invoked.connect((id) => {
-                print(id);
+                print("%s\n", id);
                 loop.quit();
             });
 
@@ -272,7 +271,7 @@ abstract class NotifdCommand : Command {
                 print(@"$(notification.id)\n");
             }
 
-            if (!wait.enabled || (actions.actions.length > 0)) {
+            if (wait.enabled || (actions.actions.length > 0)) {
                 Unix.signal_add(Posix.Signal.HUP, () => {
                     OrgFreedesktopNotifications.close(notification.id);
                     return Source.REMOVE;
@@ -313,7 +312,7 @@ abstract class NotifdCommand : Command {
             if (notification != null) {
                 var node = Json.gvariant_serialize(notification.serialize());
                 var json = Json.to_string(node, pretty.enabled);
-                print(json);
+                print("%s\n", json);
             } else {
                 return err(@"notification '$id' does not exist");
             }
@@ -383,7 +382,7 @@ abstract class NotifdCommand : Command {
             var notifications = settings.get_value("notifications");
             var node = Json.gvariant_serialize(notifications);
             var json = Json.to_string(node, pretty.enabled);
-            print(json);
+            print("%s\n", json);
             return 0;
         }
     }
@@ -404,6 +403,7 @@ abstract class NotifdCommand : Command {
 
         public override async int execute() {
             var notifd = Notifd.get_default();
+            var loop = new MainLoop();
 
             if (events.enabled) {
                 notifd.notified.connect((id) => {
@@ -422,7 +422,23 @@ abstract class NotifdCommand : Command {
                     stdout.flush();
                 });
             }
-            new MainLoop().run();
+
+            Unix.signal_add(Posix.Signal.HUP, () => {
+                loop.quit();
+                return Source.REMOVE;
+            });
+
+            Unix.signal_add(Posix.Signal.INT, () => {
+                loop.quit();
+                return Source.REMOVE;
+            });
+
+            Unix.signal_add(Posix.Signal.TERM, () => {
+                loop.quit();
+                return Source.REMOVE;
+            });
+
+            loop.run();
             return 0;
         }
     }
@@ -461,12 +477,14 @@ abstract class NotifdCommand : Command {
                 return 0;
             }
 
-            print(dnd ? "enabled" : "disabled");
+            print("%s\n", dnd ? "enabled" : "disabled");
             return 0;
         }
     }
 
     class CLI : NotifdCommand {
+        SpecialFlag version;
+
         public CLI() {
             name = "astal-notifd";
             about("Notifd CLI");
@@ -482,7 +500,12 @@ abstract class NotifdCommand : Command {
         }
 
         public override async int execute() {
-            printerr(Quarrel.help(this));
+            if (version.enabled) {
+                print("%s\n", VERSION);
+                return 0;
+            }
+
+            printerr("%s\n", Quarrel.help(this));
             return 1;
         }
     }
@@ -494,7 +517,7 @@ abstract class NotifdCommand : Command {
             var cmd = new CLI().parse(argv) as NotifdCommand;
 
             if (help.enabled) {
-                print(Quarrel.help(cmd));
+                print("%s\n", Quarrel.help(cmd));
                 return 0;
             }
 
