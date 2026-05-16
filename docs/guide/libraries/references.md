@@ -15,6 +15,8 @@ documentation will vary depending on the language they are used in.
   daemon
 - [Bluetooth](https://docs.astal.dev/bluetooth): Library to control bluez over
   dbus
+- [Brightness](https://docs.astal.dev/brightness): Library and CLI tool to read
+  and control device brightness
 - [Cava](https://docs.astal.dev/cava): Audio visualizer library using cava
 - [Greet](https://docs.astal.dev/greet): Library and CLI tool for sending
   requests to greetd
