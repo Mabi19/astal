@@ -34,7 +34,7 @@ pkgs: let
     "AstalWl-0.1" = {
       name = "AstalWl";
       description = "A central library to manage wayland objects";
-      docs_url = "https://docs.astal.dev/wl";
+      docs_url = "https://docs.astal.dev/wl/wl";
     };
     "NM-1.0" = {
       name = "NetworkManager";
@@ -57,7 +57,7 @@ pkgs: let
       ["Gtk" "https://docs.gtk.org/gtk3/"]
       ["GdkPixbuf" "https://docs.gtk.org/gdk-pixbuf/"]
       ["AstalIO" "https://docs.astal.dev/io/"]
-      ["AstalWl" "https://docs.astal.dev/wl/"]
+      ["AstalWl" "https://docs.astal.dev/wl/wl"]
 
       # FIXME: these are not gi-docgen generated, therefore links are broken
       ["NM" "https://networkmanager.dev/docs/libnm/latest/"]
